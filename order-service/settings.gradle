@@ -1,0 +1,9 @@
+rootProject.name = "order-service"
+
+include "domain"
+include "application"
+include "driver-rest"
+include "bootstrap"
+
+include "driven-persistence"
+include "driven-participants-api-client"

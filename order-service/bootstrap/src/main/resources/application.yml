@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: order-service
+
+  r2dbc:
+    url: ${DB_URL:r2dbc:postgresql://localhost:5432/order}
+    username: ${DB_USER:sagalab}
+    password: ${DB_PASSWORD:sagalab}
+
+  sql:
+    init:
+      mode: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+participants:
+  inventory: ${INVENTORY_URL:http://localhost:8081}
+  payment: ${PAYMENT_URL:http://localhost:8082}
+  shipping: ${SHIPPING_URL:http://localhost:8083}

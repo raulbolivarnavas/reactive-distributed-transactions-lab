@@ -1,0 +1,4 @@
+CREATE DATABASE "order";
+CREATE DATABASE inventory;
+CREATE DATABASE payment;
+CREATE DATABASE shipping;

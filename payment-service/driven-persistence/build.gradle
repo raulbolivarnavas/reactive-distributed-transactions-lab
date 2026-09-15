@@ -1,0 +1,15 @@
+dependencies {
+    implementation project(':application')
+    implementation project(':domain')
+    implementation libs.spring.context.support
+
+    implementation platform(
+            'org.springframework.boot:spring-boot-dependencies:4.1.1'
+    )
+
+    implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+    runtimeOnly 'org.postgresql:r2dbc-postgresql'
+
+    //implementation libs.boot.starter.data.r2dbc
+    //implementation libs.postgresql.r2dbc
+}

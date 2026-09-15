@@ -1,0 +1,8 @@
+rootProject.name = "shipping-service"
+
+include "domain"
+include "application"
+include "driver-rest"
+include "bootstrap"
+
+include "driven-persistence"

@@ -1,0 +1,899 @@
+{
+  "info": {
+    "name": "Reactive Distributed Transactions Lab — Incremento 01",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Raul Bolivar. Contratos del primer ZIP: POST /api/v1/orders y GET /api/v1/orders/{id}; respuesta plana orderId/sagaId/command/status/failureReason. Importar y ajustar las variables de URL a los puertos publicados en Compose. Ejecutar carpetas en orden con Collection Runner. Sin autenticación. Seis escenarios con validación de creación y lectura persistida; cuatro health checks; cinco validaciones. Las compensaciones reales deben inspeccionarse en PostgreSQL: este incremento no expone GET de operaciones de participantes. No incluye idempotencia, reinicios ni timeout/retry porque todavía no están implementados. No ejecutada contra tu entorno local."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "orderUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "inventoryUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "paymentUrl",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "shippingUrl",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sagaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_NONE",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_INVENTORY_UNAVAILABLE",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_PAYMENT_REJECTED",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_SHIPPING_UNAVAILABLE",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_REFUND_FAILED",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId_RELEASE_FAILED",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 — Salud de los cuatro servicios",
+      "item": [
+        {
+          "name": "order — Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/actuator/health",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Servicio UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "inventory — Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{inventoryUrl}}/actuator/health",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Servicio UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "payment — Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paymentUrl}}/actuator/health",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Servicio UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "shipping — Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{shippingUrl}}/actuator/health",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Servicio UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — NONE → COMPLETED",
+      "item": [
+        {
+          "name": "Crear — NONE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"NONE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_NONE\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"COMPLETED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_NONE\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Sin fallo\", () => pm.expect(data.failureReason).to.eql(null));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_NONE}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_NONE\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"COMPLETED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — INVENTORY_UNAVAILABLE → CANCELLED",
+      "item": [
+        {
+          "name": "Crear — INVENTORY_UNAVAILABLE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"INVENTORY_UNAVAILABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_INVENTORY_UNAVAILABLE\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_INVENTORY_UNAVAILABLE\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Motivo de fallo conservado\", () => pm.expect(data.failureReason).to.be.a(\"string\").and.not.empty);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_INVENTORY_UNAVAILABLE}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_INVENTORY_UNAVAILABLE\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — PAYMENT_REJECTED → CANCELLED",
+      "item": [
+        {
+          "name": "Crear — PAYMENT_REJECTED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"PAYMENT_REJECTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_PAYMENT_REJECTED\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_PAYMENT_REJECTED\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Motivo de fallo conservado\", () => pm.expect(data.failureReason).to.be.a(\"string\").and.not.empty);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_PAYMENT_REJECTED}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_PAYMENT_REJECTED\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 — SHIPPING_UNAVAILABLE → CANCELLED",
+      "item": [
+        {
+          "name": "Crear — SHIPPING_UNAVAILABLE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"SHIPPING_UNAVAILABLE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_SHIPPING_UNAVAILABLE\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_SHIPPING_UNAVAILABLE\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Motivo de fallo conservado\", () => pm.expect(data.failureReason).to.be.a(\"string\").and.not.empty);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_SHIPPING_UNAVAILABLE}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_SHIPPING_UNAVAILABLE\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"CANCELLED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 — REFUND_FAILED → COMPENSATION_FAILED",
+      "item": [
+        {
+          "name": "Crear — REFUND_FAILED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"REFUND_FAILED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_REFUND_FAILED\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"COMPENSATION_FAILED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_REFUND_FAILED\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Motivo de fallo conservado\", () => pm.expect(data.failureReason).to.be.a(\"string\").and.not.empty);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_REFUND_FAILED}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_REFUND_FAILED\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"COMPENSATION_FAILED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 — RELEASE_FAILED → COMPENSATION_FAILED",
+      "item": [
+        {
+          "name": "Crear — RELEASE_FAILED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "Crea una nueva orden en cada ejecución. Comprueba el resultado de la Saga; no demuestra por sí sola los efectos en las bases de datos participantes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150.0,\n  \"scenario\": \"RELEASE_FAILED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"orderId_RELEASE_FAILED\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "let data;",
+                  "try { data = pm.response.json(); } catch (e) { pm.test(\"Respuesta JSON\", () => { throw e; }); }",
+                  "if (data) {",
+                  " pm.test(\"Estado terminal esperado\", () => pm.expect(data.status).to.eql(\"COMPENSATION_FAILED\"));",
+                  " pm.test(\"orderId UUID\", () => pm.expect(data.orderId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " pm.test(\"sagaId UUID\", () => pm.expect(data.sagaId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+                  " if (pm.response.code === 201 && data.orderId) { pm.collectionVariables.set(\"orderId_RELEASE_FAILED\", data.orderId); pm.collectionVariables.set(\"orderId\", data.orderId); pm.collectionVariables.set(\"sagaId\", data.sagaId); }",
+                  " pm.test(\"Motivo de fallo conservado\", () => pm.expect(data.failureReason).to.be.a(\"string\").and.not.empty);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar orden persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/{{orderId_RELEASE_FAILED}}",
+            "description": "Ejecutar después de Crear en esta carpeta."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Misma orden\", () => pm.expect(data.orderId).to.eql(pm.collectionVariables.get(\"orderId_RELEASE_FAILED\")));",
+                  "pm.test(\"Estado persistido\", () => pm.expect(data.status).to.eql(\"COMPENSATION_FAILED\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 — Validaciones API",
+      "item": [
+        {
+          "name": "Cantidad cero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 0,\n  \"amount\": 150,\n  \"scenario\": \"NONE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monto negativo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": -1,\n  \"scenario\": \"NONE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cliente vacío",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"\",\n  \"productId\": \"PROD-001\",\n  \"quantity\": 2,\n  \"amount\": 150,\n  \"scenario\": \"NONE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Producto vacío",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders",
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUS-001\",\n  \"productId\": \"\",\n  \"quantity\": 2,\n  \"amount\": 150,\n  \"scenario\": \"NONE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orden inexistente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{orderUrl}}/api/v1/orders/00000000-0000-0000-0000-000000000000",
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

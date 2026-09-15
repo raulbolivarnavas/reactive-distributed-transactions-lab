@@ -1,0 +1,6 @@
+rootProject.name = "reactive-distributed-transactions-lab"
+
+includeBuild("inventory-service")
+includeBuild("order-service")
+includeBuild("payment-service")
+includeBuild("shipping-service")

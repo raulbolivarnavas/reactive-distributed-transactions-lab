@@ -1,0 +1,92 @@
+services:
+
+  # [POSTGRES] Database service for the application
+  postgres:
+    image: postgres:17
+
+    environment:
+      POSTGRES_USER: sagalab
+      POSTGRES_PASSWORD: sagalab
+    ports: ["5432:5432"]
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sagalab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # [ORDER-SERVICE] Service for managing orders
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+
+    ports: ["8080:8080"]
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: r2dbc:postgresql://postgres:5432/order
+      INVENTORY_URL: http://inventory-service:8080
+      PAYMENT_URL: http://payment-service:8080
+      SHIPPING_URL: http://shipping-service:8080
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      inventory-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      shipping-service:
+        condition: service_started
+
+  # [INVENTORY-SERVICE] Service for managing inventory
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+
+    ports: ["8081:8080"]
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: r2dbc:postgresql://postgres:5432/inventory
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # [PAYMENT-SERVICE] Service for managing payment
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+
+    ports: ["8082:8080"]
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: r2dbc:postgresql://postgres:5432/payment
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # [SHIPPING-SERVICE] Service for managing shipping
+  shipping-service:
+    build:
+      context: .
+      dockerfile: shipping-service/Dockerfile
+
+    ports: ["8083:8080"]
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: r2dbc:postgresql://postgres:5432/shipping
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

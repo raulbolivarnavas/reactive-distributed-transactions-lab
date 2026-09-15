@@ -1,0 +1,12 @@
+${AnsiColor.BRIGHT_BLUE}
+██████╗                  ██╗    ██████╗         ██╗██╗
+██╔══██╗ █████╗ ██╗   ██╗██║    ██╔══██╗  █████╗██║╚═╝██╗   ██╗ █████╗  █████╗
+██████╔╝ ╚═══██╗██║   ██║██║    ██████╔╝██╔══██╗██║██╗██║   ██║ ╚═══██╗██╔═══╝
+██╔══██╗ ██████║██║   ██║██║    ██╔══██╗██║  ██║██║██║╚██╗ ██╔╝ ██████║██║
+██║  ██║██╔══██║╚██████╔╝██║    ██████╔╝╚█████╔╝██║██║ ╚████╔╝ ██╔══██║██║
+╚═╝  ╚═╝╚██████╝ ╚═════╝ ╚═╝    ╚═════╝  ╚════╝ ╚═╝╚═╝  ╚═══╝  ╚██████╝╚═╝
+${AnsiColor.DEFAULT}
+ :: ${AnsiColor.GREEN}Spring Boot Version${AnsiColor.DEFAULT} :: ${spring-boot.version}
+ :: ${AnsiColor.GREEN}Java Version${AnsiColor.DEFAULT}        :: ${java.version}
+ :: ${AnsiColor.BRIGHT_GREEN}Service Name${AnsiColor.DEFAULT}        :: ${spring.application.name}
+ :: ${AnsiColor.BLUE}Copyright${AnsiColor.DEFAULT}           :: Raul bolivar

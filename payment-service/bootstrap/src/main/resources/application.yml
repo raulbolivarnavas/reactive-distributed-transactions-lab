@@ -1,0 +1,17 @@
+server:
+  port: ${SERVER_PORT:8082}
+spring:
+  application:
+    name: payment-service
+  r2dbc:
+    url: ${DB_URL:r2dbc:postgresql://localhost:5432/payment}
+    username: ${DB_USER:sagalab}
+    password: ${DB_PASSWORD:sagalab}
+  sql:
+    init:
+      mode: always
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

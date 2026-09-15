@@ -1,0 +1,48 @@
+apply plugin: 'org.springframework.boot'
+
+dependencies {
+    implementation project(':application')
+    implementation project(':domain')
+
+    // ── Driver Adapters
+    implementation project(':driver-rest')
+
+    // ── Driven Adapters
+    implementation project(':driven-persistence')
+
+    // ── Support for Logging
+    implementation libs.support.logging
+
+    // ── Spring Boot WebFlux
+    implementation libs.boot.starter.webflux
+
+    // ── Actuator (Liveness/Readiness por defecto en Boot 4)
+    implementation libs.boot.actuator
+
+    // ── Validación Jakarta EE 11
+    implementation libs.boot.validation
+
+    // ── AOP — renombrado en Boot 4 (era spring-boot-starter-aop)
+    implementation libs.boot.starter.aspectj
+
+    // ── Springdoc 3.x — única versión compatible con Spring Boot 4
+    //    springdoc 2.x → Boot 3.x | springdoc 3.x → Boot 4.x
+    implementation libs.boot.springdoc.webflux
+
+    runtimeOnly libs.resilience4j.core
+
+    // ── Architecture tests
+    testImplementation libs.archunit
+}
+
+bootJar {
+    mainClass = 'com.raulbolivar.shipping.MainApplication'
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'app.jar'
+}
+
+tasks.named('jar') {
+    enabled = false
+}
